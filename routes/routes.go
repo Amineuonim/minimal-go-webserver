@@ -1,9 +1,18 @@
 package routes
 
 import (
-	"server/endpoints"
+	"server/handlers"
 	"github.com/gin-gonic/gin"
+
+	"time"
+	"github.com/gin-contrib/timeout"
+	
+	"server/constants"
+
+
 )
+
+var timer = timeout.New(timeout.WithTimeout(constants.REQUESTTIMEOUTMS *time.Millisecond))
 
 func RegisterRoutes(r *gin.Engine) {
 	// basic routes
@@ -13,6 +22,7 @@ func RegisterRoutes(r *gin.Engine) {
 	// group example (like Django namespaces)
 	api := r.Group("/api")
 	{
-		api.GET("/ping", endpoints.Ping)
+		api.GET("/health", timer, handlers.Health)
+		api.GET("/testdb",timer,handlers.TestDb)
 	}
 }

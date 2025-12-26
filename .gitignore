@@ -24,6 +24,13 @@ profile.cov
 go.work
 go.work.sum
 
+# python venv
+venv
+
+#docker stuff:
+db
+postgres-data
+
 # env file
 .env
 
