@@ -1,28 +1,35 @@
 package routes
 
 import (
-	"server/handlers"
-	"github.com/gin-gonic/gin"
-
-	"time"
-	"github.com/gin-contrib/timeout"
-	
 	"server/constants"
+	"server/handlers"
+	"server/core/user" // Import your user package
+	"time"
 
-
+	"github.com/gin-contrib/timeout"
+	"github.com/gin-gonic/gin"
 )
 
-var timer = timeout.New(timeout.WithTimeout(constants.REQUESTTIMEOUTMS *time.Millisecond))
+var timer = timeout.New(timeout.WithTimeout(constants.REQUESTTIMEOUTMS * time.Millisecond))
 
-func RegisterRoutes(r *gin.Engine) {
-	// basic routes
-	//r.GET("/", handlers.Home)
-	//r.GET("/health", handlers.Health)
+// We pass the authHandler here so routes can access the DB logic
+func RegisterRoutes(r *gin.Engine, authHandler *user.AuthHandler) {
+	
+	// Public Auth Routes
+	auth := r.Group("/auth")
+	{
+		auth.POST("/signup", timer, authHandler.Signup)
+		auth.POST("/login", timer, authHandler.Login)
+	}
 
-	// group example (like Django namespaces)
+	// Protected API Group
 	api := r.Group("/api")
+//	api.Use(user.AuthMiddleware()) // Protect all routes in this group
 	{
 		api.GET("/health", timer, handlers.Health)
-		api.GET("/testdb",timer,handlers.TestDb)
+		api.GET("/testdb", timer, handlers.TestDb)
+		
+		// Example: Get current user profile
+		// api.GET("/me", timer, authHandler.GetProfile) 
 	}
 }

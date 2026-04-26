@@ -1,51 +1,30 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"server/constants"
+	"server/core"
+	"server/core/user"
+
 	"server/routes"
 
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
+	//log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	constants.Db.ConnectPGDB()
-	router := gin.Default()
-	routes.RegisterRoutes(router)
+    // 1. Initialize your DB manager
+    dbManager := &core.DataBase{}
+    dbManager.ConnectPGDB() // This populates dbManager.DB
+    
+    // 2. CRITICAL: Assign the connection to the user package's global DB
+    user.DB = dbManager.DB 
 
-	server := &http.Server{
-		Addr:    constants.PORT,
-		Handler: router,
-	}
+    // 3. Now you can safely migrate and start the server
+    user.DB.AutoMigrate(&user.User{})
 
-	// Start server in background
-	go func() {
-		log.Infof("Server listening on %s", constants.PORT)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("server failed to start:", err)
-		}
-	}()
+    r := gin.Default()
+    authHandler := &user.AuthHandler{}
+    routes.RegisterRoutes(r, authHandler)
 
-	// Listen for interrupt signals
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
-	<-quit
-	log.Warn("Shutdown signal received")
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(constants.TIMEOUT)*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Error("Server forced to shutdown:", err)
-	} else {
-		log.Info("Server shut down cleanly")
-	}
+    r.Run(":8080")
 }

@@ -1,0 +1,11 @@
+# Database Configuration
+POSTGRES_USER=omni
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=revoxel_db
+POSTGRES_PORT=5432
+POSTGRES_HOST=localhost # Use 'postgres' if running the Go app inside Docker
+POSTGRES_TZ=UTC
+
+# Auth Configuration
+JWT_SECRET=super_secret_key_change_me_in_production
+
