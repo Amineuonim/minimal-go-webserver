@@ -1,0 +1,7 @@
+# .dockerignore
+bin/
+tmp/
+db/
+.git/
+.env
+.air.toml
