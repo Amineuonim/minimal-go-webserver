@@ -16,7 +16,7 @@ func CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
-func GenerateToken(userID uint) (string, error) {
+func GenerateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
 		"exp": time.Now().Add(TokenLifespan).Unix(),

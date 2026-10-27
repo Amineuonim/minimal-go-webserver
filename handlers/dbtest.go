@@ -1,42 +1,38 @@
 package handlers
+
 import (
-	"github.com/gin-gonic/gin"
+	"database/sql"
+	"errors"
+	"net/http"
+
 	"server/constants"
-)
-/*
-simple test query to db, initdb at core already 
-pings the db so this is optional but if you want to test this, then:
-paste into pgsql:
-create table test(
-	id SERIAL PRIMARY KEY,
-	body varchar(50)
-)
 
-*/
-
+	"github.com/gin-gonic/gin"
+)
 
 type test struct {
-	Id    uint   `gorm:"primaryKey"`
-	Body  string
+	ID   int64  `db:"id"`
+	Body string `db:"body"`
 }
-
-// Map struct to existing table "test"
-func (test) TableName() string {
-	return "test"
-}
-
 
 func TestDb(c *gin.Context) {
 	var t test
-	// Query first record
-	if err := constants.Db.DB.First(&t).Error; err != nil {
-		c.JSON(404, gin.H{"error": "record not found"})
+	err := constants.Db.DB.GetContext(
+		c.Request.Context(),
+		&t,
+		`SELECT id, body FROM test LIMIT 1`,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "record not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}
 
-	// Return Id and Body as JSON
-	c.JSON(200, gin.H{
-		"id":   t.Id,
+	c.JSON(http.StatusOK, gin.H{
+		"id":   t.ID,
 		"body": t.Body,
 	})
 }

@@ -1,30 +1,32 @@
 package main
 
 import (
+	"log"
 
+	"server/constants"
 	"server/core"
 	"server/core/user"
-
 	"server/routes"
 
 	"github.com/gin-gonic/gin"
-	//log "github.com/sirupsen/logrus"
 )
 
 func main() {
-    // 1. Initialize your DB manager
-    dbManager := &core.DataBase{}
-    dbManager.ConnectPGDB() // This populates dbManager.DB
-    
-    // 2. CRITICAL: Assign the connection to the user package's global DB
-    user.DB = dbManager.DB 
+	dbManager := &core.DataBase{}
+	dbManager.ConnectPGDB()
 
-    // 3. Now you can safely migrate and start the server
-    user.DB.AutoMigrate(&user.User{})
+	user.DB = dbManager.DB
+	constants.Db.DB = dbManager.DB
 
-    r := gin.Default()
-    authHandler := &user.AuthHandler{}
-    routes.RegisterRoutes(r, authHandler)
+	if err := user.EnsureSchema(dbManager.DB); err != nil {
+		log.Fatalf("failed to ensure database schema: %v", err)
+	}
 
-    r.Run(":8080")
+	r := gin.Default()
+	authHandler := &user.AuthHandler{}
+	routes.RegisterRoutes(r, authHandler)
+
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("server failed: %v", err)
+	}
 }

@@ -1,17 +1,23 @@
 package user
 
 import (
+	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"gorm.io/gorm"
 )
 
 type User struct {
-	gorm.Model
-	Email    string `gorm:"uniqueIndex;not null" json:"email"`
-	Password string `gorm:"not null" json:"-"`
+	ID        int64     `db:"id" json:"id"`
+	Email     string    `db:"email" json:"email"`
+	Password  string    `db:"password" json:"-"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
 type AuthHandler struct{}
@@ -23,14 +29,33 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
+	if input.Email == "" || input.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email and password are required"})
+		return
+	}
+
 	hash, err := HashPassword(input.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Crypto error"})
 		return
 	}
 
-	user := User{Email: input.Email, Password: hash}
-	if err := DB.Create(&user).Error; err != nil {
+	result, err := DB.ExecContext(
+		c.Request.Context(),
+		`INSERT INTO users (email, password) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING`,
+		input.Email, hash,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	if rows == 0 {
 		c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 		return
 	}
@@ -40,11 +65,24 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input struct{ Email, Password string }
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
+		return
+	}
 
 	var user User
-	if err := DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+	err := DB.GetContext(
+		c.Request.Context(),
+		&user,
+		`SELECT id, email, password, created_at, updated_at FROM users WHERE email = $1`,
+		input.Email,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
@@ -53,7 +91,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, _ := GenerateToken(user.ID)
+	token, err := GenerateToken(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Token error"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
@@ -66,15 +109,30 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenStr := strings.TrimPrefix(header, BearerPrefix)
-		token, _ := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return JwtSecret, nil
 		})
-
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			c.Set("userID", uint(claims["sub"].(float64)))
-			c.Next()
-		} else {
-			c.AbortWithStatus(http.StatusUnauthorized)
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
 		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		sub, ok := claims["sub"].(float64)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		c.Set("userID", int64(sub))
+		c.Next()
 	}
 }

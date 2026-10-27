@@ -1,24 +1,23 @@
 package user
 
 import (
+	"github.com/jmoiron/sqlx"
 	"os"
 	"time"
-	"gorm.io/gorm"
-
 )
 
 var (
 	// Database Reference
-	DB *gorm.DB
+	DB *sqlx.DB
 
 	// JWT Configuration
-	JwtSecret      = []byte(getEnv("JWT_SECRET", "change-me-immediately"))
-	TokenLifespan  = time.Hour * 24
-	
+	JwtSecret     = []byte(getEnv("JWT_SECRET", "change-me-immediately"))
+	TokenLifespan = time.Hour * 24
+
 	// Security Configuration
-	BcryptCost     = 14
-	AuthHeaderKey  = "Authorization"
-	BearerPrefix   = "Bearer "
+	BcryptCost    = 14
+	AuthHeaderKey = "Authorization"
+	BearerPrefix  = "Bearer "
 )
 
 // Helper to handle env defaults
